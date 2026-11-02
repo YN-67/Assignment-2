@@ -1,0 +1,9 @@
+# 原始大文件（课程提供，不随仓库分发）
+douban.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 中间产物
+report.html
