@@ -50,8 +50,8 @@ python scripts/03_apply_model.py
 # 4. 诊断实验（生成 output/diagnosis_domain.png）
 python scripts/04_diagnose.py
 
-# 5. 把 report.md 排版成 report.pdf
-python scripts/05_make_pdf.py
+# 5. 把 report.md 排版成 report.pdf 与 report.docx
+python scripts/make_report.py
 ```
 
 依赖：`jieba`、`scikit-learn`、`pandas`、`matplotlib`、`markdown`。
@@ -69,7 +69,7 @@ python scripts/05_make_pdf.py
 │   ├── 02_train_evaluate.py   # 训练与评估
 │   ├── 03_apply_model.py      # 应用到红楼梦
 │   ├── 04_diagnose.py         # 诊断实验（域错位、长度、反讽、极端词）
-│   ├── 05_make_pdf.py         # report.md → report.pdf
+│   ├── make_report.py         # report.md → report.pdf / report.docx
 │   └── common.py              # 共用工具（分词、停用词、绘图）
 ├── output/
 │   ├── metrics.txt            # 准确率/精确率/召回率/F1
