@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>作业 2：情感分类器 × 红楼梦 — 交互式结果</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --ink: #1a1a1a; --muted: #6b7280; --line: #e5e7eb;
+  --pos: #2f7d4f; --neg: #b91c1c; --accent: #1d4ed8;
+  --bg: #faf9f7; --card: #ffffff;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: var(--bg); color: var(--ink);
+  margin: 0; line-height: 1.7;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+header { text-align: center; padding: 36px 0 8px; }
+header h1 { font-size: 26px; margin: 0 0 6px; }
+header p { color: var(--muted); margin: 0; font-size: 14px; }
+.badge {
+  display: inline-block; background: #eef2ff; color: var(--accent);
+  border-radius: 999px; padding: 2px 12px; font-size: 12.5px; margin-top: 10px;
+}
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 28px 0; }
+.metric {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px; text-align: center;
+}
+.metric .v { font-size: 30px; font-weight: 700; color: var(--accent); }
+.metric .k { font-size: 13px; color: var(--muted); margin-top: 2px; }
+section {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px 24px; margin: 22px 0;
+}
+section h2 { font-size: 18px; margin: 0 0 4px; }
+section .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
+.controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.controls label { font-size: 13px; color: var(--muted); }
+.controls select, .controls input[type=range] { font-size: 13px; }
+.chart-box { position: relative; height: 380px; }
+.callout {
+  background: #f0f7ff; border-left: 3px solid var(--accent);
+  padding: 10px 14px; border-radius: 0 8px 8px 0;
+  font-size: 13.5px; margin-top: 14px;
+}
+.words { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.wordbar { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+.wordbar .w { width: 84px; font-size: 14px; text-align: right; flex-shrink: 0; }
+.wordbar .bar { height: 16px; border-radius: 4px; }
+.wordbar.pos .bar { background: var(--pos); }
+.wordbar.neg .bar { background: var(--neg); }
+.wordbar .val { font-size: 12px; color: var(--muted); }
+h3.side { font-size: 15px; margin: 0 0 10px; }
+h3.side.pos { color: var(--pos); } h3.side.neg { color: var(--neg); }
+.filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.filters button {
+  border: 1px solid var(--line); background: #fff; border-radius: 999px;
+  padding: 5px 14px; font-size: 13px; cursor: pointer;
+}
+.filters button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.mis-item { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+.mis-item .meta { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+.tag { border-radius: 4px; padding: 1px 8px; font-size: 12px; color: #fff; }
+.tag.fn { background: var(--neg); } .tag.fp { background: #d97706; }
+.mis-item .text { font-size: 14px; }
+.mis-item .text.clamp {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; cursor: pointer;
+}
+.mis-item .text.clamp:hover { color: var(--accent); }
+footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 40px; }
+footer a { color: var(--accent); }
+@media (max-width: 720px) {
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .words { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>用豆瓣书评训练情感分类器，并应用于《红楼梦》</h1>
+  <p>Logistic Regression · TF-IDF · jieba 分词 · 2,000 条标注评论 · 120 回逐回打分</p>
+  <span class="badge">CHI 3242 作业 2 · 交互式结果页</span>
+</header>
+
+<div class="metrics" id="metrics"></div>
+
+<section>
+  <h2>《红楼梦》逐回情感曲线</h2>
+  <p class="sub">每回的 P(positive)（模型判"正面"的概率）。悬停查看回目；拖动滑块调整移动平均窗口。</p>
+  <div class="controls">
+    <label>移动平均窗口：<span id="winLabel">10</span> 回</label>
+    <input type="range" id="window" min="1" max="30" value="10" step="1">
+    <label style="margin-left:16px"><input type="checkbox" id="showRaw" checked> 显示每回原始分数</label>
+  </div>
+  <div class="chart-box"><canvas id="arcChart"></canvas></div>
+  <div class="callout" id="arcNote"></div>
+</section>
+
+<section>
+  <h2>模型学到了什么词？</h2>
+  <p class="sub">逻辑回归权重最正 / 最负的 20 个词（权重 = 该词把评论拉向正面 / 负面的强度）。</p>
+  <div class="words">
+    <div><h3 class="side pos">最正面 Top 20</h3><div id="posWords"></div></div>
+    <div><h3 class="side neg">最负面 Top 20</h3><div id="negWords"></div></div>
+  </div>
+  <div class="callout">正面词多是抽象大词（人生、世界、生命），负面词多是具体抱怨词（抄袭、垃圾、矫情）——模型学到的既有情感，也有书评文体的表达套路。</div>
+</section>
+
+<section>
+  <h2>被错分的评论（66 条）</h2>
+  <p class="sub">点击筛选方向；点击文本展开全文。多数错分只是勉强越过 0.5 门槛——模型并不自信。</p>
+  <div class="filters">
+    <button class="active" data-f="all">全部 66</button>
+    <button data-f="fn">真负 → 猜正 39</button>
+    <button data-f="fp">真正 → 猜负 27</button>
+  </div>
+  <div id="misList"></div>
+  <div class="callout">典型失效模式：先抑后扬的转折、反讽（"真烂啊"配 5 星）、攻击对象从书转向作者——情感由结构承载，词袋看不见结构。</div>
+</section>
+
+<section>
+  <h2>域错位诊断：曲线偏负是模型的偏见，不是小说更悲伤</h2>
+  <p class="sub">用同一模型给"域内中性文本"（豆瓣 3 星评论拼成的伪章节）打分作对照。</p>
+  <div class="metrics" style="grid-template-columns: repeat(2, 1fr);">
+    <div class="metric"><div class="v">0.638</div><div class="k">豆瓣 3 星伪章节（域内）P 均值</div></div>
+    <div class="metric"><div class="v">0.470</div><div class="k">红楼梦 120 回（域外）P 均值</div></div>
+  </div>
+  <div class="callout">连域内的中性文本都被打到 0.638 偏正面，而红楼梦只有 0.470——偏负主要来自域错位（古典白话的用词不在模型的"正面词汇表"里），而非小说本身更悲伤。最高分第 98 回恰是黛玉之死：华丽辞藻 = 正面，这个等式在悼亡文里完全失效。</div>
+</section>
+
+<footer>
+  数据与代码：<a href="https://github.com/YN-67/Assignment-2">github.com/YN-67/Assignment-2</a>
+  · 训练：豆瓣书评 5 星/1 星各 1,000 条 · 模型：LogisticRegression(random_state=42) · 特征：TF-IDF（仅在训练集上 fit）
+</footer>
+</div>
+
+<script>
+const DATA = {"metrics": {"accuracy": 0.835, "precision": 0.816, "recall": 0.865, "f1": 0.8398, "test_size": 400.0}, "hlm": [{"chapter": 1, "title": "第一回  甄士隐梦幻识通灵　贾雨村风尘怀闺秀 此开卷第一回也", "p_positive": 0.5627815654992685}, {"chapter": 2, "title": "第二回  贾夫人仙逝扬州城　冷子兴演说荣国府", "p_positive": 0.5727015157250334}, {"chapter": 3, "title": "第三回   贾雨村夤缘复旧职　林黛玉抛父进京都", "p_positive": 0.5499874054798305}, {"chapter": 4, "title": "第四回  薄命女偏逢薄命郎　葫芦僧乱判葫芦案", "p_positive": 0.5185152299337081}, {"chapter": 5, "title": "第五回  游幻境指迷十二钗　饮仙醪曲演红楼梦 第四回中既将薛", "p_positive": 0.4934237372657982}, {"chapter": 6, "title": "第六回  贾宝玉初试云雨情　刘姥姥一进荣国府", "p_positive": 0.450144279343459}, {"chapter": 7, "title": "第七回  送宫花贾琏戏熙凤　宴宁府宝玉会秦钟", "p_positive": 0.4678199529294249}, {"chapter": 8, "title": "第八回 比通灵金莺微露意　探宝钗黛玉半含酸", "p_positive": 0.4677903605421213}, {"chapter": 9, "title": "第九回  恋风流情友入家塾　起嫌疑顽童闹学堂", "p_positive": 0.4078638147526856}, {"chapter": 10, "title": "第十回　金寡妇贪利权受辱　张太医论病细穷源", "p_positive": 0.5812620030018814}, {"chapter": 11, "title": "第十一回  庆寿辰宁府排家宴　见熙凤贾瑞起淫心", "p_positive": 0.5105088940683262}, {"chapter": 12, "title": "第十二回  王熙凤毒设相思局　贾天祥正照风月鉴", "p_positive": 0.5129462090852825}, {"chapter": 13, "title": "第十三回  秦可卿死封龙禁尉　王熙凤协理宁国府", "p_positive": 0.4191808917087646}, {"chapter": 14, "title": "第十四回  林如海捐馆扬州城　贾宝玉路谒北静王", "p_positive": 0.4808429876007872}, {"chapter": 15, "title": "第十五回  王凤姐弄权铁槛寺　秦鲸卿得趣馒头庵", "p_positive": 0.4308992537597722}, {"chapter": 16, "title": "第十六回  贾元春才选凤藻宫　秦鲸卿夭逝黄泉路", "p_positive": 0.4666129039472311}, {"chapter": 17, "title": "第十七回  大观园试才题对额　荣国府归省庆元宵", "p_positive": 0.4690618549868889}, {"chapter": 18, "title": "第十八回  隔珠帘父女勉忠勤　搦湘管姊弟裁题咏", "p_positive": 0.4652652373530204}, {"chapter": 19, "title": "第十九回  情切切良宵花解语　意绵绵静日玉生香", "p_positive": 0.3794218835830087}, {"chapter": 20, "title": "第二十回  王熙凤正言弹妒意　林黛玉俏语谑娇音", "p_positive": 0.402835202990368}, {"chapter": 21, "title": "第二十一回  贤袭人娇嗔箴宝玉　俏平儿软语救贾琏", "p_positive": 0.464971511674155}, {"chapter": 22, "title": "第二十二回  听曲文宝玉悟禅机　制灯迷贾政悲谶语", "p_positive": 0.4326546491521815}, {"chapter": 23, "title": "第二十三回  西厢记妙词通戏语　牡丹亭艳曲警芳心", "p_positive": 0.507053819756332}, {"chapter": 24, "title": "第二十四回  醉金刚轻财尚义侠　痴女儿遗帕惹相思", "p_positive": 0.4727144800602991}, {"chapter": 25, "title": "第二十五回  魇魔法姊弟逢五鬼　红楼梦通灵遇双真", "p_positive": 0.4538086549640521}, {"chapter": 26, "title": "第二十六回  蜂腰桥设言传心事　潇湘馆春困发幽情", "p_positive": 0.4812985718484479}, {"chapter": 27, "title": "第二十七回  滴翠亭杨妃戏彩蝶　埋香冢飞燕泣残红", "p_positive": 0.457072396467979}, {"chapter": 28, "title": "第二十八回  蒋玉菡情赠茜香罗　薛宝钗羞笼红麝串", "p_positive": 0.4234034777008243}, {"chapter": 29, "title": "第二十九回  享福人福深还祷福　痴情女情重愈斟情", "p_positive": 0.4198371769859579}, {"chapter": 30, "title": "第三十回  宝钗借扇机带双敲　龄官划蔷痴及局外", "p_positive": 0.4185810509587732}, {"chapter": 31, "title": "第三十一回  撕扇子作千金一笑　因麒麟伏白首双星", "p_positive": 0.4248623170307709}, {"chapter": 32, "title": "第三十二回  诉肺腑心迷活宝玉　含耻辱情烈死金钏", "p_positive": 0.4290068732444623}, {"chapter": 33, "title": "第三十三回  手足耽耽小动唇舌　不肖种种大承笞挞", "p_positive": 0.5141938590922546}, {"chapter": 34, "title": "第三十四回  情中情因情感妹妹　错里错以错劝哥哥", "p_positive": 0.4819810028160336}, {"chapter": 35, "title": "第三十五回  白玉钏亲尝莲叶羹　黄金莺巧结梅花络", "p_positive": 0.4815446879487148}, {"chapter": 36, "title": "第三十六回  绣鸳鸯梦兆绛芸轩　识分定情悟梨香院", "p_positive": 0.4400227585372462}, {"chapter": 37, "title": "第三十七回  秋爽斋偶结海棠社　蘅芜苑夜拟菊花题 这年贾政又", "p_positive": 0.4500513786302367}, {"chapter": 38, "title": "第三十八回  林潇湘魁夺菊花诗　薛蘅芜讽和螃蟹咏 首页|原创", "p_positive": 0.4902164413629615}, {"chapter": 39, "title": "第三十九回  村姥姥是信口开合　情哥哥偏寻根究底", "p_positive": 0.4406093857164752}, {"chapter": 40, "title": "第四十回  史太君两宴大观园　金鸳鸯三宣牙牌令", "p_positive": 0.4614169610418538}, {"chapter": 41, "title": "第四十一回  栊翠庵茶品梅花雪　怡红院劫遇母蝗虫", "p_positive": 0.5085767972269613}, {"chapter": 42, "title": "第四十二回  蘅芜君兰言解疑癖　潇湘子雅谑补余香", "p_positive": 0.4298953725121781}, {"chapter": 43, "title": "第四十三回  闲取乐偶攒金庆寿　不了情暂撮土为香", "p_positive": 0.4181030503244738}, {"chapter": 44, "title": "第四十四回  变生不测凤姐泼醋　喜出望外平儿理妆", "p_positive": 0.3829590844266968}, {"chapter": 45, "title": "第四十五回  金兰契互剖金兰语　风雨夕闷制风雨词", "p_positive": 0.3548806875674827}, {"chapter": 46, "title": "第四十六回  尴尬人难免尴尬事　鸳鸯女誓绝鸳鸯偶", "p_positive": 0.4890677462060402}, {"chapter": 47, "title": "第四十七回  呆霸王调情遭苦打　冷郎君惧祸走他乡", "p_positive": 0.4149107734545058}, {"chapter": 48, "title": "第四十八回  滥情人情误思游艺　慕雅女雅集苦吟诗", "p_positive": 0.4936591350038444}, {"chapter": 49, "title": "第四十九回  琉璃世界白雪红梅　脂粉香娃割腥啖膻", "p_positive": 0.4538357848113123}, {"chapter": 50, "title": "第五十回  芦雪庵争联即景诗　暖香坞雅制春灯谜", "p_positive": 0.4465198724151574}, {"chapter": 51, "title": "第五十一回  薛小妹新编怀古诗　胡庸医乱用虎狼药 众人闻得宝", "p_positive": 0.4507521554717384}, {"chapter": 52, "title": "第五十二回  俏平儿情掩虾须镯　勇晴雯病补雀金裘 贾母道：“", "p_positive": 0.4551077351321296}, {"chapter": 53, "title": "第五十三回  宁国府除夕祭宗祠　荣国府元宵开夜宴", "p_positive": 0.4805200923285332}, {"chapter": 54, "title": "第五十四回  史太君破陈腐旧套　王熙凤效戏彩斑衣", "p_positive": 0.4867466143036295}, {"chapter": 55, "title": "第五十五回  辱亲女愚妾争闲气　欺幼主刁奴蓄险心", "p_positive": 0.4523848545584574}, {"chapter": 56, "title": "第五十六回  敏探春兴利除宿弊　时宝钗小惠全大体", "p_positive": 0.4924490688076116}, {"chapter": 57, "title": "第五十七回  慧紫鹃情辞试忙玉　慈姨妈爱语慰痴颦", "p_positive": 0.4977112131785343}, {"chapter": 58, "title": "第五十八回  杏子阴假凤泣虚凰　茜纱窗真情揆痴理", "p_positive": 0.4836977317018746}, {"chapter": 59, "title": "第五十九回  柳叶渚边嗔莺咤燕　绛云轩里召将飞符", "p_positive": 0.4690905144537835}, {"chapter": 60, "title": "第六十回  茉莉粉替去蔷薇硝　玫瑰露引来茯苓霜", "p_positive": 0.5090033073125988}, {"chapter": 61, "title": "第六十一回  投鼠忌器宝玉瞒赃　判冤决狱平儿行权 那柳家的笑道：“好猴儿崽子，你亲婶子找野老儿去了，你岂不多得一个叔叔，有什么疑的！别讨我把你头上的杩子盖似的几根Б毛お下来！还不开门让我进去呢。”这小厮且不开门，且拉着笑说：“好婶子，你这一进去，好歹偷些杏子出来赏我吃．我这里老等．你若忘了时，日后半夜三更打酒买油的，我不给你老人家开门，也不答应你，随你干叫去．\"柳氏啐道：“发了昏的，今年不比往年，把这些东西都分给了众奶奶了．一个个的不象抓破了脸的，人打树底下一过，两眼就象那黧鸡似的，还动他的果子！昨儿我从李子树下一走，偏有一个蜜蜂儿往脸上一过，我一招手儿，偏你那好舅母就看见了．他离的远看不真，只当我摘李子呢，就Б声浪嗓喊起来，说又是`还没供佛呢-，又是`老太太，太太不在家还没进鲜呢，等进了上头，嫂子们都有分的-，倒象谁害了馋痨等李子出汗呢．叫我也没好", "p_positive": 0.4241014261838893}, {"chapter": 62, "title": "第六十二回  憨湘云醉眠芍药茵?呆香菱情解石榴裙", "p_positive": 0.4050668762946336}, {"chapter": 63, "title": "第六十三回  寿怡红群芳开夜宴　死金丹独艳理亲丧", "p_positive": 0.4469011573198638}, {"chapter": 64, "title": "第六十四回  幽淑女悲题五美吟　浪荡子情遗九龙佩", "p_positive": 0.5239203068847007}, {"chapter": 65, "title": "第六十五回  贾二舍偷娶尤二姨　尤三姐思嫁柳二郎", "p_positive": 0.4202560651088926}, {"chapter": 66, "title": "第六十六回  情小妹耻情归地府　冷二郎一冷入空门", "p_positive": 0.46887260720067}, {"chapter": 67, "title": "第六十七回  见土仪颦卿思故里　闻秘事凤姐讯家童", "p_positive": 0.4833022606912255}, {"chapter": 68, "title": "第六十八回  苦尤娘赚入大观园　酸凤姐大闹宁国府", "p_positive": 0.4858697611101262}, {"chapter": 69, "title": "第六十九回  弄小巧用借剑杀人　觉大限吞生金自逝", "p_positive": 0.5094622227482867}, {"chapter": 70, "title": "第七十回  林黛玉重建桃花社　史湘云偶填柳絮词", "p_positive": 0.3830639750475141}, {"chapter": 71, "title": "第七十一回  嫌隙人有心生嫌隙　鸳鸯女无意遇鸳鸯", "p_positive": 0.4436620103212397}, {"chapter": 72, "title": "第七十二回  王熙凤恃强羞说病　来旺妇倚势霸成亲", "p_positive": 0.475431990647151}, {"chapter": 73, "title": "第七十三回  痴丫头误拾绣春囊　懦小姐不问累金凤", "p_positive": 0.4369841809815957}, {"chapter": 74, "title": "第七十四回  惑奸谗抄检大观园　矢孤介杜绝宁国府", "p_positive": 0.4449561637872294}, {"chapter": 75, "title": "第七十五回  开夜宴异兆发悲音　赏中秋新词得佳谶", "p_positive": 0.4538056329307663}, {"chapter": 76, "title": "第七十六回  凸碧堂品笛感凄清　凹晶馆联诗悲寂寞", "p_positive": 0.4575711843556012}, {"chapter": 77, "title": "第七十七回  俏丫鬟抱屈夭风流　美优伶斩情归水月", "p_positive": 0.4394630171089395}, {"chapter": 78, "title": "第七十八回  老学士闲征诡画词　痴公子杜撰芙蓉诔", "p_positive": 0.5367936141526017}, {"chapter": 79, "title": "第七十九回  薛文龙悔娶河东狮　贾迎春误嫁中山狼", "p_positive": 0.5003807481185181}, {"chapter": 80, "title": "第八十回  美香菱屈受贪夫棒　王道士胡诌妒妇方", "p_positive": 0.4147407802774248}, {"chapter": 81, "title": "第八十一回  占旺相四美钓游鱼　奉严词两番入家塾", "p_positive": 0.4496286347997428}, {"chapter": 82, "title": "第八十二回  老学究讲义警顽心　病潇湘痴魂惊恶梦", "p_positive": 0.4957374934412898}, {"chapter": 83, "title": "第八十三回  省宫闱贾元妃染恙　闹闺阃薛宝钗吞声", "p_positive": 0.4676353971971595}, {"chapter": 84, "title": "第八十四回  试文字宝玉始提亲　探惊风贾环重结怨", "p_positive": 0.4570315288273363}, {"chapter": 85, "title": "第八十五回  贾存周报升郎中任　薛文起复惹放流刑", "p_positive": 0.4740011990847801}, {"chapter": 86, "title": "第八十六回  受私贿老官翻案牍　寄闲情淑女解琴书", "p_positive": 0.46954150584517}, {"chapter": 87, "title": "第八十七回  感深秋抚琴悲往事　坐禅寂走火入邪魔", "p_positive": 0.5115326802723745}, {"chapter": 88, "title": "第八十八回  博庭欢宝玉赞孤儿　正家法贾珍鞭悍仆", "p_positive": 0.4580136816407723}, {"chapter": 89, "title": "第八十九回  人亡物在公子填词　蛇影杯弓颦卿绝粒", "p_positive": 0.445204761964977}, {"chapter": 90, "title": "第九十回  失绵衣贫女耐嗷嘈　送果品小郎惊叵测", "p_positive": 0.4179889837399506}, {"chapter": 91, "title": "第九十一回  纵淫心宝蟾工设计　布疑阵宝玉妄谈禅", "p_positive": 0.4750982819016387}, {"chapter": 92, "title": "第九十二回  评女传巧姐慕贤良　玩母珠贾政参聚散", "p_positive": 0.5563058473046283}, {"chapter": 93, "title": "第九十三回  甄家仆投靠贾家门　水月庵掀翻风月案", "p_positive": 0.4439717431390226}, {"chapter": 94, "title": "第九十四回  宴海棠贾母赏花妖　失宝玉通灵知奇祸", "p_positive": 0.4244067641062282}, {"chapter": 95, "title": "第九十五回  因讹成实元妃薨逝　以假混真宝玉疯颠", "p_positive": 0.5209237240041823}, {"chapter": 96, "title": "第九十六回  瞒消息凤姐设奇谋　泄机关颦儿迷本性", "p_positive": 0.522103980510727}, {"chapter": 97, "title": "第九十七回  林黛玉焚稿断痴情　薛宝钗出闺成大礼", "p_positive": 0.5136356588431893}, {"chapter": 98, "title": "第九十八回  苦绛珠魂归离恨天　病神瑛泪洒相思地", "p_positive": 0.5961540148459639}, {"chapter": 99, "title": "第九十九回  守官箴恶奴同破例　阅邸报老舅自担惊", "p_positive": 0.446041512107956}, {"chapter": 100, "title": "第一零零回  破好事香菱结深恨　悲远嫁宝玉感离情", "p_positive": 0.5077452855795106}, {"chapter": 101, "title": "第一零一回  大观园月夜感幽魂　散花寺神签惊异兆", "p_positive": 0.4287286064397174}, {"chapter": 102, "title": "第一零二回  宁国府骨肉病灾襟?大观园符水驱妖孽", "p_positive": 0.5594784411290755}, {"chapter": 103, "title": "第一零三回  施毒计金桂自焚身　昧真禅雨村空遇旧", "p_positive": 0.4788664481178695}, {"chapter": 104, "title": "第一零四回  醉金刚小鳅生大浪　痴公子余痛触前情", "p_positive": 0.4885710818942024}, {"chapter": 105, "title": "第一零五回  锦衣军查抄宁国府　骢马使弹劾平安州", "p_positive": 0.4971092617991647}, {"chapter": 106, "title": "第一零六回  王熙凤致祸抱羞惭　贾太君祷天消祸患", "p_positive": 0.4891507107637852}, {"chapter": 107, "title": "第一零七回  散余资贾母明大义　复世职政老沐天恩", "p_positive": 0.5066172325218827}, {"chapter": 108, "title": "第一零八回  强欢笑蘅芜庆生辰　死缠绵潇湘闻鬼哭", "p_positive": 0.5294281955610811}, {"chapter": 109, "title": "第一零九回  候芳魂五儿承错爱　还孽债迎女返真元", "p_positive": 0.445064820886941}, {"chapter": 110, "title": "第一一零回  史太君寿终归地府　王凤姐力诎失人心", "p_positive": 0.439576890485794}, {"chapter": 111, "title": "第一一一回  鸳鸯女殉主登太虚　狗彘奴欺天招伙盗", "p_positive": 0.4675734273918168}, {"chapter": 112, "title": "第一一二回  活冤孽妙尼遭大劫　死雠仇赵妾赴冥曹", "p_positive": 0.468593373961348}, {"chapter": 113, "title": "第一一三回  忏宿冤凤姐托村妪　释旧憾情婢感痴郎", "p_positive": 0.4005352371580051}, {"chapter": 114, "title": "第一一四回  王熙凤历幻返金陵　甄应嘉蒙恩还玉阙", "p_positive": 0.4785543718477473}, {"chapter": 115, "title": "第一一五回  惑偏私惜春矢素志　证同类宝玉失相知", "p_positive": 0.4026065350269447}, {"chapter": 116, "title": "第一一六回  得通灵幻境悟仙缘　送慈柩故乡全孝道", "p_positive": 0.5254288798367397}, {"chapter": 117, "title": "第一一七回  阻超凡佳人双护玉　欣聚党恶子独承家", "p_positive": 0.4822268202381245}, {"chapter": 118, "title": "第一一八回  记微嫌舅兄欺弱女　惊谜语妻妾谏痴人 说话邢王二", "p_positive": 0.5004581514903488}, {"chapter": 119, "title": "第一一九回  中乡魁宝玉却尘缘　沐皇恩贾家延世泽 首页|原创", "p_positive": 0.4939498540102932}, {"chapter": 120, "title": "第一二零回  甄士隐详说太虚情　贾雨村归结红楼梦", "p_positive": 0.5849046477666582}], "misclassified": [{"text": "恕我冒昧，我很难接受这样混乱的叙述。我觉得，小说最重要的是故事。如果故事讲得不够明了、不吸引人，同时又混杂了很多哲学和抽象的东西，再加上呓语式的行文，那么这部小说终究是不耐看的。", "true_label": 0, "pred_label": 1, "p_positive": 0.5118739574962237}, {"text": "很多人说搞笑，我一点没笑出来，很多人说感动，我甚至觉得男主角傻逼装逼二逼泛滥。豆瓣最被高估的一本书。电影也是。", "true_label": 0, "pred_label": 1, "p_positive": 0.5524661464017615}, {"text": "印象最深的还是，兰香看着家里的光景，想着放弃继续读书，好好务农。但她的哥哥孙少安却反对，说，无论我们家多么穷，也要供你上大学。我一个人不够人手，等你二哥回来，无论如何也要把你供上，你不用管其他，好好读书就行。看到后面，兰香考上了大学，也不由地为她欣喜。", "true_label": 1, "pred_label": 0, "p_positive": 0.4602212962924121}, {"text": "读完后印象最深的人物是平斯基，这哥们沙皇时期当秘密警察抓革命党，二月革命后投身革命党，十月革命后居然又当上了秘密警察，专门搞肃反，帮布尔什维克们抓孟什维克。", "true_label": 1, "pred_label": 0, "p_positive": 0.4655568912875589}, {"text": "不看过想不出来另一群人是那样生活着的，不过不是特别喜欢作者的描述手法，人物太多故事太杂，要是主线清楚一些会更好。", "true_label": 0, "pred_label": 1, "p_positive": 0.5265213311698893}, {"text": "如果可以还是不要去读这本书~如果你想闹心~ 有些东西远比我们想象的沉重~ 没有太多的如果~只有真实的结果~ ", "true_label": 0, "pred_label": 1, "p_positive": 0.5031338189797617}, {"text": "在张美丽那篇 我觉得作者是个神经病 你凭什么认为你跟那部分男生不一样 在那样性你比别人看得更透  而且张美丽是他姐？woc 你拍小时代呢？？？戏剧性强的狗血啊  也就前三篇值的一看 后面他就变成直男癌了…", "true_label": 0, "pred_label": 1, "p_positive": 0.5078351988213515}, {"text": "情节的布置的确牛逼，但庞大剧情的起因却只是一件屁大的小事。大Boss记忆力实在惊人，都一把年纪了小时候的事情竟然记得一件不落，心胸狭窄的比面条还洗还能当上世界总统~实在替作品中凡人的智商捉急，科学教育搞了这么多年，上吊复活人体悬空这种小孩子把戏还在顶礼膜拜，作者是讽刺当今教育吗", "true_label": 1, "pred_label": 0, "p_positive": 0.3533705832030427}, {"text": "不亏是2017豆瓣评分上的推理小说第一，紫金陈很早就看他的书📖，从默默无名，到今天号称国产推理第一人，大概是因为自己在浙大紫金港校区附近住过有感情。总之是，一天就刷完了，最后的结尾，呵呵，不错，支持紫金陈，我一定买本实体书收藏。", "true_label": 1, "pred_label": 0, "p_positive": 0.4260245609343414}, {"text": "小时候不知道为什么就是酷爱这类励志文，都成精神寄托了，至今为止我都没能动谁的奶酪，也守不住自己的奶酪。", "true_label": 0, "pred_label": 1, "p_positive": 0.5799663572840074}, {"text": "主张把诗人赶出理想国的，是柏拉图，不是苏格拉底！作者引经据典，口口声声地说要把影评做成“艺术”，可连自己的书都没校对过。", "true_label": 0, "pred_label": 1, "p_positive": 0.526816226248887}, {"text": "并不看好这本书，大多数人也许是因为心里迫切需要一些神奇的现象心理来弥补一下自己的缺陷所需，这本书真的很失败，不要被书中的一些东西影响，保持冷静看这本书，你会发现，这本书，真的是很垃圾。", "true_label": 0, "pred_label": 1, "p_positive": 0.5102810869841866}, {"text": "其实单纯就故事而言并不觉得多么吸引人，不过这样的作品也不是以跌宕起伏的情节着称……钱老文笔太好，话说得太妙，道理参悟得太透，不打五星有点对不住", "true_label": 1, "pred_label": 0, "p_positive": 0.4280885119829749}, {"text": "外企 私企，人际关系也一样 海底深。就像里面一个新人，上班时近乎噩梦的不适应，每天回家 就像溺水者上岸。  ——有人的地方 就有江湖", "true_label": 0, "pred_label": 1, "p_positive": 0.5283807044884318}, {"text": "高开低走，没有宏大的世界观，没有深层的社会对立面的挖掘，甚至没有科幻。雨果奖，请告诉我凭什么得奖的？", "true_label": 0, "pred_label": 1, "p_positive": 0.5673050787962097}, {"text": "一颗半，讲真，总有白夜行的代入感。看网上的说法，新海美冬是西本雪穗的后续。我不这么想，嗯，怎么说，这个女人让我不舒服。可能她经历过什么，或者她是绝对的坏，但是她更是像一条咬人的毒蛇🐍。口怕。因为是从雅也的身份代入，对这个女人无法原谅", "true_label": 0, "pred_label": 1, "p_positive": 0.5003466133948801}, {"text": "大概翻了一下，感觉买了以后有点后悔，说的很多情节都有遇到，但是不适合自己，只能说蔡永康给我们列举了一个场景，口才还是要看我们自己多经历，多思考。生活就是现场直播，主角是我们自己，我们只有慢慢打磨自己，才会让自己变得更加优秀……", "true_label": 0, "pred_label": 1, "p_positive": 0.6696065907222706}, {"text": "其实并不如书名所说这是一本独裁的手册 不过很好的介绍了民主和独裁的政治架构 还是坚持自己的想法 天下政客一般黑", "true_label": 1, "pred_label": 0, "p_positive": 0.4350185667549193}, {"text": "这不是一本侦探小说。推理小说爱好者大约会觉得此书冗长。这是一本杰作。伟大的作品大抵都是有一个伟大的主题，又包罗万象。探案下是宗教，宗教下是人性，人性下是关于上帝，所谓天意的质询——埃科自己借阿德索在全文最终给出了这个问题的答案。看完后深受震撼词不达意了。我等文盲实在是太崇拜埃科这种吊书袋的作者了啊啊啊啊啊！！！", "true_label": 1, "pred_label": 0, "p_positive": 0.4691662404949552}, {"text": "都不记得哪个介绍让我看的，刚开始好像还很正常，后来就发现为啥通篇都在给我科普奢侈品知识，一堆美女周围围了一堆帅哥，只有爱情的烦恼，生活…如此简单。呵呵", "true_label": 0, "pred_label": 1, "p_positive": 0.5493480442697167}, {"text": "主人公在海滩上杀人的那一段看得我感觉自己已身处海滩，阳光炽烈，唿吸困难，环境心境全都俱备的情况杀人是唯一的走向结果。看完这一段时平时不怎么抽烟的我都出去到外面点了根烟，缓解了一下心境才继续回来看。 全书除了几处印象深刻的地方之外就是最后教给我们的一句话：我知道这世界我已无处藏身，只是你他妈的凭什么审批我的灵魂。 ", "true_label": 1, "pred_label": 0, "p_positive": 0.4390183522855818}, {"text": "高三第二次模拟考试开始读的。高考的压力完全不能阻止我各种挤时间读完这本书。前面还有点不耐，但是越读越有趣。相较于高三开始读，我觉得更适合初中生作为哲学入门><以后学起来还轻松有趣些~", "true_label": 1, "pred_label": 0, "p_positive": 0.47340565392991}, {"text": "上次的没有写完，现在有时间继续写了，却没有那种心情了，到底意难平，一直究根问底，知道是什么究竟怎样，情怀也没有了，那就再见吧", "true_label": 0, "pred_label": 1, "p_positive": 0.503751092845027}, {"text": "情结：把罗马帝国搬到了银河之中。      手法：铺垫过长，高潮过短。                   说是科幻不如说是伪历史小说。值得肯定的是，乌合之众没一届行的", "true_label": 0, "pred_label": 1, "p_positive": 0.5442279084743799}, {"text": "作者觉得比特币是对于消费者是根本不存在问题的优秀解决方案。(谁说比特币就非要取代信用卡和现金了，比特币就是作为一种避税手段/ 财产保存或者财产数字化手段就已经解决了很大的刚需)  e租宝是骗子 好点的地方：新技术的压路机向你碾压而来，如果你不能成为压路机的一部分，那么你就只能成为路的一部分。  马克安德森： 任何新技术通常都会经过25年的接受和采用周期", "true_label": 0, "pred_label": 1, "p_positive": 0.5181232580582378}, {"text": "看完电影就还想再看一遍小说。电影男主角出彩，但结局改的太温情，有一点对不起一直塑造的许三观朴实的形象。对许玉兰完全没什么塑造，有点可惜，明明是个牛逼的角色。", "true_label": 1, "pred_label": 0, "p_positive": 0.4449731179639583}, {"text": "看过以后，我才明白，陈凯歌和徐克的伟大。单看小说，真的真的很一般，或者说李碧华的叙事手法很不对我胃口，但电影真的不错，但愿这不是李碧华的最高水平", "true_label": 0, "pred_label": 1, "p_positive": 0.5217617253220769}, {"text": "这是我看的第二本痛骂的书 一看作者我释然了 真烂啊！2个时空嫁2个人是完美吗 还一直把女猪的超凡完美推给穿越 穿越你妹啊！明明是因为自己瞎写啊！", "true_label": 0, "pred_label": 1, "p_positive": 0.5380699099162443}, {"text": "我在社团面试的时候，凡是要进会的同学跟我说他最喜欢的书是这一本，老师和我就会毫不犹豫把他从录取名单中刷掉。", "true_label": 0, "pred_label": 1, "p_positive": 0.5330242912463184}, {"text": "柯莫西一直坚持着“不下树”的原则，在别人看来奇怪，但他做的事情，却都为了更好地认识人们，帮助人们，最终获得了别人的尊敬。除了主人公，其他配角也展示出世人百态，被某种欲望、追求而束缚，投身在忙碌之中，不能说他们错了，只是随波逐流。柯西莫是个榜样式的人物，喜欢与否，在于每个人的选择。", "true_label": 1, "pred_label": 0, "p_positive": 0.4955055877179807}, {"text": "很有感觉的一本书，你会发现自己居然可以这么犯贱，能微笑着看完从头到尾笨蛋、傻瓜的说辞。也只有经历过这种反省，才能成长起来。", "true_label": 1, "pred_label": 0, "p_positive": 0.4012995199048638}, {"text": "我P大写玄幻也这么6，喜欢大师兄这个绣花枕头，不由分说地背按在池壁上，不想再跟铜钱客气了，严娘娘霸气威武。感情戏发展有丢丢快吧，人物塑造寥寥数笔就很立体，功底真是厉害。", "true_label": 1, "pred_label": 0, "p_positive": 0.3447629145097708}, {"text": "充斥着卖淫、毒品、暴力、绝望的一个世界，但它确是这个世界的一部分写照，但不仅仅是这个世界。这本书是和别人换书看的，很多负能量，不太喜欢。", "true_label": 0, "pred_label": 1, "p_positive": 0.7458226473031575}, {"text": "又是社会热门话题器官捐献，但是，书里的熏子作为母亲那种一直认为女儿没有死的执念实在是太可怕了，有些事情真的是需要放过自己，才能不让自己再在这个怪圈了一直止步不前", "true_label": 0, "pred_label": 1, "p_positive": 0.6457278135044657}, {"text": "“倘若我问心有愧呢”，真是傻人有傻福，小说结局原来与电视剧不一样，从小心中执念到看见张无忌抱得美人双归也是罢了", "true_label": 1, "pred_label": 0, "p_positive": 0.4867255980046111}, {"text": "历史的产物，那个年份这类书确实打鸡血一样有市场，但是现在民智已开，再看这类读物，就让人哭笑不得。其实作者水平也还是有一点，不过凡事没想明白，看些皮毛就以为自己很行。作者也是没赶上好时候，如果现在也应不会混得比带鱼、花花差。", "true_label": 0, "pred_label": 1, "p_positive": 0.5052461803657254}, {"text": "这个结局不像活着那么悲。心情随着主人公的快活而变得轻松。整本书下来，觉得许三观对一乐的爱真是没得说…", "true_label": 1, "pred_label": 0, "p_positive": 0.4973399337257601}, {"text": "西晋政权的崩溃有选太子失当的因素，更深层次的原因是官僚阶层的凝固化和排他性。看这书之前因为不想读书，一直翻的是通鉴，正好是魏晋部分，再看这书，真是学到很多东西", "true_label": 1, "pred_label": 0, "p_positive": 0.4823876662450432}, {"text": "这本书是他争议最大的一本书吧 因为被告抄袭 然后很多人都说 抄的话也很出名啊 个人认为不管怎么样 这本书的故事还不错", "true_label": 1, "pred_label": 0, "p_positive": 0.4169723071001873}, {"text": "感觉自己简直是小畑健脑残粉。棋魂是最早看的一部动漫，大概是初中吧……从此一见棋魂误终身(笑  到现在来来回回翻了有十来遍了吧，当初因为棋魂烂尾还给他写了同人，不过我大概是唯一不希望sai复活的同人作者吧(捂脸 这次再翻开棋魂……满满的都是青春啊", "true_label": 1, "pred_label": 0, "p_positive": 0.4160805329381494}, {"text": "无论对演奏者还是作曲家而言，都是非常有意义的一张碟。Arriaga连20岁都没活到，算是真正早夭了吧。也是CASALS四重奏第一张碟，封面太美好……PS。 赌这三首里拉一小的都是Vera。", "true_label": 0, "pred_label": 1, "p_positive": 0.5757103744932962}, {"text": "可恶的是她要革金庸的命，不然可以打二星。说这话不是为了维护金庸，而是因为她到现在还没有革命动作，难道等金庸死了就算革命成功？", "true_label": 0, "pred_label": 1, "p_positive": 0.5996742915441845}, {"text": "朱棣治国有方啊，即便是篡权夺位，也是个功大于过的好皇帝。于谦真是牛人，以后有机会去杭州一定要去好好看一看他的祠堂。可惜这么好的人，也沦为别人权利欲望斗争中的牺牲品了。", "true_label": 1, "pred_label": 0, "p_positive": 0.4700366576341916}, {"text": "用“海盗”的“污言秽语”和“放浪形骸”嘲讽当年的“斗天斗地斗人其乐无穷”。逻辑诡异合理，言语污秽正经，行为放浪无邪。鬼才。", "true_label": 1, "pred_label": 0, "p_positive": 0.4678400262730493}, {"text": "五星。我知道这是本科幻小说，但是读后感中最突出的感想竟然是他写尽人类劣根性。三体系列中最喜欢这本。但是缺点也很明显，书中的主要女性角色太扁平，只有颜值，除了美就是美，对人物的树立很不成功。但是，这些都无法掩盖这本书作为科幻小说的牛逼，好几次被作者的脑洞惊到叹为观止。有生之年能有这样的作品出现，实在是我的幸运！", "true_label": 1, "pred_label": 0, "p_positive": 0.4764489823087984}, {"text": "顺势+杠杆=livemore，逆势+杠杆=liveover。livemore不过是美国造神运动的着名人物之一而已。成为股神最简单不过，不过牛市做多，熊市做空而已。看看他的接班人，巴菲特，索罗斯，鲍尔森，都是如此。正应了一句话，新手死在追涨，老手死在抄底，高手死在杠杆。", "true_label": 0, "pred_label": 1, "p_positive": 0.5305579841443153}, {"text": "感觉是颓废版的卢思浩。第四夜还是不错的。       《最基本元素》写朋友王亦凡，最后两句“我得不到的女人都将痛苦终生，和我抢女人的男人都、得、死。”让我觉得他是不是有点变态→_→", "true_label": 0, "pred_label": 1, "p_positive": 0.5070881146660532}, {"text": "封面，书名远比内容要精彩，大家都是孤独的，所以才相互依赖，相互牵绊，虽然渐行渐远，但却从未远离。病态却无法停止的生活状态，人人心里有沟壑，拼命在掩饰，结果一败涂地。行销的很成功的书，造成小部分流行却无任何深远意义，感受，是很个人的事情，与任何无关。", "true_label": 0, "pred_label": 1, "p_positive": 0.5659198689282733}, {"text": "当时在看《平凡的世界》，因为电视上在宣传《何以》，所以找书来看看。一晚上就读完了。很简单的故事，不明白为什么那么多人疯迷，反正对我而言，它被路遥的书秒成渣了。", "true_label": 0, "pred_label": 1, "p_positive": 0.6048097118183983}, {"text": "不感冒的书，大概不羁的姿态是唯一我们能够与世界相对抗的吧，但事事皆能挑逗G点的话，每天伐克又有啥意思呢。", "true_label": 0, "pred_label": 1, "p_positive": 0.665292885749208}, {"text": "十多年过去，回头想这本书，细节已然白茫茫，但此刻心里深深觉得自己当初对这本书的观感很可疑，这种状况像是，你完全忘了你说的是什么，但你只记得你所说的特别可疑", "true_label": 0, "pred_label": 1, "p_positive": 0.512680977376521}, {"text": "在罗胖那里听到了对李笑来的推崇，一个GTD爱好者就找来看了。当然结论依然只有坚持这两个字，但方法论的结构真的是居高临下般的艰难。", "true_label": 0, "pred_label": 1, "p_positive": 0.5506409454090747}, {"text": "不喜欢。这本书应该是被电影里的大牌们炒起来的，原来并没怎么火。可能是作者是把微博集中而成的缘故吧，没体会到什么深意。可能是作者想表达一种岁月沧桑，一帮所谓的铁哥们浪迹江湖，却让我感到语言很糙，故事很单调乏味。仅消遣吧。", "true_label": 0, "pred_label": 1, "p_positive": 0.5638304046189615}, {"text": "看了一集电视剧决定看原着，还真是改的面目全非，这么可爱的安儿竟然没有出现，结婚生子才是传统吗？连唐晶都不可规避，自己还能坚持多久", "true_label": 1, "pred_label": 0, "p_positive": 0.40892931491333}, {"text": "对这种剧情反转再反转，疑团一个接一个的故事完全没有没有抵抗力，一天一本书的节奏，对人性的黑暗毫无遮挡的剖析让人不忍叫绝。美中不足就是十一字到结尾才出现，而不是作为贯穿整个故事的线索，有种结尾硬塞的感觉，还不如以无人岛杀人事件做标题来的贴切。", "true_label": 1, "pred_label": 0, "p_positive": 0.3942425994910759}, {"text": "我就想知道，是我傻逼，还是太多人捧臭脚？一个混混少年，浑身上下找不出两个优点，一些百无聊赖的经历和乱七八糟的想法搅在一起就成世界名着了？这书除了名字好听和一种意识流的写作手法外，还有什么优点？充其量就是一本普通的小说，谈得上世界名着吗？", "true_label": 0, "pred_label": 1, "p_positive": 0.5546238861477731}, {"text": "感觉像传销组织的洗脑。过度神话狼性，神话游牧文明，一味贬低农耕文化。越看越觉得愤怒，像现在的标题党为引起共鸣而不尊重事实，什么好的事物都来自于狼，但是听说草原根本没有狼图腾一说。无论是什么类型的文学作品，都不应该有误导读者的倾向，不然和某些随意篡改历史的网络言情有什么不同呢", "true_label": 0, "pred_label": 1, "p_positive": 0.5328283316817337}, {"text": "以本人拙见，这本书就是被跟风炒作起来的，流水帐式写法，关于内容、细节细腻我不是那么赞同，对于众多文学作者而言，那个不比这本书细节更加细腻？", "true_label": 0, "pred_label": 1, "p_positive": 0.6282499089982232}, {"text": "通篇白话，简明易懂，要是历史这门学科能这样交，我就会喜欢历史了。纵使朱元璋当上皇帝后制定了一系列不怎么样甚至错误的决策，但是爬上皇帝位置这段腥风血雨的经历是真心牛逼。", "true_label": 1, "pred_label": 0, "p_positive": 0.4947483196983705}, {"text": "靠软色情。吸引眼球。写得什幺玩意啊，警察会单枪匹马回到凶案现场吗？一堆警察会检查不到凶案现场有人吗？破绽太大", "true_label": 0, "pred_label": 1, "p_positive": 0.5134308406417086}, {"text": "知道什么叫做涂鸦么！！！涂鸦起码还是完整的！！！你是拿电脑输入法随便乱打填进去的吧！！！！！！你大爷啊！！！！！", "true_label": 0, "pred_label": 1, "p_positive": 0.5033852092906335}, {"text": "应该是小学三四年级读到的，当时真心被惊艳到，连着几天抱着不肯撒手。且不说主人公的人格魅力，单说作者的情节、人设编排就让人拍手叫绝。当爱德蒙·邓蒂斯撕下伪装面具时，自认深谙其道连结局都猜到的自尊心小小受挫，受蒙蔽的不只事中人，还有我们这些局外看客。。。👍👍", "true_label": 1, "pred_label": 0, "p_positive": 0.4718304908098459}, {"text": "梁山伯和祝英台也许可能只是成为同窗的好朋友，反而是因为马文才和家里的逼迫，使他们的恋情持续升温；罗密欧与朱丽叶的爱情因为家里的世仇遭到父母的强烈反对，却使他们的爱情达到白热化的程度。假如他们没有受到任何干涉，说不定绝美的爱情故事充其量不过是昙花一现的初恋的感情冲动呢？哇哦，心理学原来是这样用的", "true_label": 1, "pred_label": 0, "p_positive": 0.4631164110361751}, {"text": "初中时读的这本书，那时如果我玩豆瓣一定会给他5星，因为那是一个流行非主流的年代，个性签名都爱用火星文，有些字句可以表述那个年纪固然会有的心情，所以能撷捡出个别好字句的书印象就会不赖，丝毫不明白一本书整体性的重要。 但随着年纪越来越大，渐渐会重视海明威这样的作家，便明白了什么是小家子气。", "true_label": 0, "pred_label": 1, "p_positive": 0.509529336298549}, {"text": "可悲！一代建筑学的大师，被文革摧残得最后没有尊严地带着病痛离去！呜唿哀哉我大中华！可耻可耻！文革啊！", "true_label": 0, "pred_label": 1, "p_positive": 0.5209605253958939}, {"text": "借以默尔索在母亲葬礼上没有落泪的事情，给默尔索戴上了冷血无情的帽子。而这完全是与案件无关的。这完全是个逻辑谬误，法官也是滑天下之大稽。默尔索自始至终都是一个局外人，对自己，对爱人，对朋友。", "true_label": 1, "pred_label": 0, "p_positive": 0.4242646661154938}], "words": {"pos": [{"word": "人生", "weight": 1.5847628155312667}, {"word": "世界", "weight": 1.445561727351657}, {"word": "生活", "weight": 1.4009574836450596}, {"word": "很多", "weight": 1.090959781544222}, {"word": "一种", "weight": 1.084297882809378}, {"word": "喜欢", "weight": 1.036159102446804}, {"word": "生命", "weight": 1.0281974014827848}, {"word": "最好", "weight": 0.9631293854170164}, {"word": "先生", "weight": 0.9527380762698492}, {"word": "人类", "weight": 0.9255457470225223}, {"word": "能够", "weight": 0.9001144717436625}, {"word": "了解", "weight": 0.8886325947742738}, {"word": "关于", "weight": 0.8881113341994828}, {"word": "幸福", "weight": 0.8827877497728847}, {"word": "特别", "weight": 0.8703489353804487}, {"word": "方式", "weight": 0.8650276219678253}, {"word": "活着", "weight": 0.8403474795732436}, {"word": "感动", "weight": 0.82028012576736}, {"word": "面对", "weight": 0.8142215071990226}, {"word": "最后", "weight": 0.8117223445991817}], "neg": [{"word": "抄袭", "weight": -2.4433240362616075}, {"word": "这种", "weight": -1.9267015872152364}, {"word": "恶心", "weight": -1.6787183045549852}, {"word": "一星", "weight": -1.647856728196419}, {"word": "看不下去", "weight": -1.636672759099804}, {"word": "失望", "weight": -1.5016468366203302}, {"word": "垃圾", "weight": -1.446996654949671}, {"word": "这么", "weight": -1.373961268127227}, {"word": "女主", "weight": -1.3662373492215625}, {"word": "完全", "weight": -1.3582734218008208}, {"word": "剧情", "weight": -1.3107669042982604}, {"word": "文笔", "weight": -1.285773765703273}, {"word": "浪费", "weight": -1.2629701757789635}, {"word": "实在", "weight": -1.247264894695564}, {"word": "矫情", "weight": -1.2446217267484148}, {"word": "不能", "weight": -1.2119702389412794}, {"word": "真是", "weight": -1.1907608002129224}, {"word": "不想", "weight": -1.1859466382475643}, {"word": "玛丽", "weight": -1.1751308334995614}, {"word": "逻辑", "weight": -1.1597477452793838}]}};
+
+// ---- 指标卡片 ----
+const m = DATA.metrics;
+const metricDefs = [
+  ["accuracy", "准确率 Accuracy"],
+  ["precision", "精确率 Precision"],
+  ["recall", "召回率 Recall"],
+  ["f1", "F1"],
+];
+document.getElementById("metrics").innerHTML = metricDefs.map(([k, label]) =>
+  `<div class="metric"><div class="v">${(m[k]*100).toFixed(1)}%</div><div class="k">${label}</div></div>`
+).join("");
+
+// ---- 情感曲线 ----
+const chapters = DATA.hlm.map(d => d.chapter);
+const scores = DATA.hlm.map(d => d.p_positive);
+const titles = DATA.hlm.map(d => `${d.chapter} 回 · ${d.title}`);
+
+let arcChart;
+function rolling(arr, w) {
+  if (w <= 1) return arr.slice();
+  const half = Math.floor(w / 2), out = [];
+  for (let i = 0; i < arr.length; i++) {
+    let s = 0, n = 0;
+    for (let j = Math.max(0, i - half); j <= Math.min(arr.length - 1, i + half); j++) { s += arr[j]; n++; }
+    out.push(s / n);
+  }
+  return out;
+}
+function drawArc() {
+  const w = +document.getElementById("window").value;
+  const showRaw = document.getElementById("showRaw").checked;
+  document.getElementById("winLabel").textContent = w;
+  const ma = rolling(scores, w);
+  const datasets = [];
+  if (showRaw) datasets.push({
+    label: "每回 P(positive)", data: scores,
+    borderColor: "rgba(29,78,216,.35)", backgroundColor: "rgba(29,78,216,.15)",
+    pointRadius: 2.5, pointHoverRadius: 6, borderWidth: 1, tension: 0,
+  });
+  if (w > 1) datasets.push({
+    label: `${w} 回移动平均`, data: ma,
+    borderColor: "#b91c1c", borderWidth: 2.5, pointRadius: 0, tension: 0.35,
+  });
+  const cfg = {
+    type: "line",
+    data: { labels: chapters, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { position: "top" },
+        tooltip: {
+          callbacks: { title: items => titles[items[0].dataIndex] }
+        },
+      },
+      scales: {
+        y: { min: 0.3, max: 0.65, title: { display: true, text: "P(positive)" },
+             grid: { color: ctx => ctx.tick.value === 0.5 ? "#9ca3af" : "#f1f1f1" } },
+        x: { title: { display: true, text: "回数" }, ticks: { stepSize: 10 } },
+      },
+    },
+  };
+  if (arcChart) arcChart.destroy();
+  arcChart = new Chart(document.getElementById("arcChart"), cfg);
+}
+document.getElementById("window").addEventListener("input", drawArc);
+document.getElementById("showRaw").addEventListener("change", drawArc);
+
+const topCh = DATA.hlm.reduce((a, b) => b.p_positive > a.p_positive ? b : a);
+const lowCh = DATA.hlm.reduce((a, b) => b.p_positive < a.p_positive ? b : a);
+document.getElementById("arcNote").innerHTML =
+  `全书 P 在 <b>${Math.min(...scores).toFixed(3)}–${Math.max(...scores).toFixed(3)}</b>，均值 <b>0.470</b>。` +
+  `最高：第 ${topCh.chapter} 回（${topCh.p_positive.toFixed(3)}，${topCh.title}）；` +
+  `最低：第 ${lowCh.chapter} 回（${lowCh.p_positive.toFixed(3)}，${lowCh.title}）。`;
+
+// ---- 词权重条 ----
+function renderWords(elId, list, cls, maxAbs) {
+  document.getElementById(elId).innerHTML = list.map(d => {
+    const pct = Math.abs(d.weight) / maxAbs * 100;
+    return `<div class="wordbar ${cls}">
+      <span class="w">${d.word}</span>
+      <div class="bar" style="width:${pct}%"></div>
+      <span class="val">${d.weight.toFixed(2)}</span></div>`;
+  }).join("");
+}
+const allW = [...DATA.words.pos, ...DATA.words.neg];
+const maxAbs = Math.max(...allW.map(d => Math.abs(d.weight)));
+renderWords("posWords", DATA.words.pos, "pos", maxAbs);
+renderWords("negWords", DATA.words.neg, "neg", maxAbs);
+
+// ---- 错分浏览器 ----
+const misList = document.getElementById("misList");
+function renderMis(filter) {
+  const items = DATA.misclassified.filter(d =>
+    filter === "all" ? true : filter === "fn" ? (d.true_label === 0 && d.pred_label === 1)
+                                     : (d.true_label === 1 && d.pred_label === 0));
+  misList.innerHTML = items.map((d, i) => {
+    const kind = d.true_label === 0 ? "fn" : "fp";
+    const kindLabel = kind === "fn" ? "真负 → 猜正" : "真正 → 猜负";
+    return `<div class="mis-item">
+      <div class="meta">
+        <span class="tag ${kind}">${kindLabel}</span>
+        <span>P(positive) = ${d.p_positive.toFixed(3)}</span>
+      </div>
+      <div class="text clamp" onclick="this.classList.toggle('clamp')">${d.text}</div>
+    </div>`;
+  }).join("");
+}
+document.querySelectorAll(".filters button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filters button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    renderMis(btn.dataset.f);
+  });
+});
+renderMis("all");
+drawArc();
+</script>
+</body>
+</html>
